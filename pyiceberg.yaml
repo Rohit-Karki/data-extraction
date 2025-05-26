@@ -1,5 +1,0 @@
-catalog:
-  default:
-    type: hive
-    uri: thrift://localhost:9083  # Your metastore service
-    warehouse: hdfs://localhost:9000/warehouse  # Your warehouse location
