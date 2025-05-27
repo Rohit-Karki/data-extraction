@@ -5,14 +5,13 @@ from mysql.connector.pooling import MySQLConnectionPool
 
 dbconfig = {
     "host": "localhost",
-    "user": "user",
-    "password": "password",
-    "database": "exampledb",
+    "user": "root",
+    "password": "rootpassword",
+    "database": "mydb",
 }
 
 try:
     cnx_pool = MySQLConnectionPool(pool_name="mypool", pool_size=5, **dbconfig)
-
     print("Connection pool created successfully")
 
     # Get a connection from the pool
@@ -35,16 +34,21 @@ finally:
 
 
 def create_mysql_connection(
-    host="localhost",
-    user="your_username",
-    password="your_password",
-    database="your_database",
+    # host="localhost",
+    # user="your_username",
+    # password="your_password",
+    # database="your_database",
 ):
     """Create MySQL connection"""
     try:
-        connection = mysql.connector.connect(
-            host=host, user=user, password=password, database=database
-        )
+        # connection = mysql.connector.connect(
+        #     host=host, user=user, password=password, database=database
+        # )
+        # # Use the connection pool to get a connection
+        global cnx_pool
+        if not cnx_pool:
+            raise ValueError("Connection pool is not initialized.")
+        connection = cnx_pool.get_connection()
         if connection.is_connected():
             print("Successfully connected to MySQL database")
             return connection
