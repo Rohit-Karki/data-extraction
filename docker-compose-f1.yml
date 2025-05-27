@@ -59,5 +59,11 @@ services:
     networks:
       - nessie-net
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+
 networks:
   nessie-net:
