@@ -3,8 +3,9 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, IntegerType, StringType, FloatType
 import pandas as pd
 import os
-from pyiceberg.catalog import NessieCatalog
-from pyspark.sql import SparkSession
+
+# from pyiceberg.catalog import NessieCatalog
+# from pyspark.sql import SparkSession
 
 # import pyarrow.parquet as pq
 # import pyarrow.compute as pc
@@ -16,19 +17,28 @@ os.environ["PYICEBERG_HOME"] = os.getcwd()
 #     "nessie",
 #     **{
 #         "uri": "http://localhost:19120/iceberg/main/",
-#         "warehouse": "hdfs://datanode-new:9870/warehouse",  # Add warehouse location
+#     },
+# )
+
+# catalog = load_catalog(
+#     name="nessie_catalog",
+#     **{
+#         "type": "nessie",
+#         "uri": "http://localhost:19120/api/v1",  # Matches Nessie container
+#         "ref": "main",
+#         "warehouse": "hdfs://namenode:9000/warehouse",  # Must match Nessie config
 #     },
 # )
 
 # catalog = load_catalog("default")
 
-# catalog = load_catalog(
-#     "hive",
-#     **{
-#         "uri": "thrift://localhost:9083",
-#         "warehouse": "file:///tmp/iceberg-warehouse",  # Use local filesystem instead of HDFS
-#     },
-# )
+catalog = load_catalog(
+    "hive",
+    **{
+        "uri": "thrift://localhost:9083",
+        "warehouse": "hdfs://namenode:9000/warehouse",  # Use local filesystem instead of HDFS
+    },
+)
 
 # catalog = NessieCatalog(
 #     name="nessie",
@@ -37,25 +47,25 @@ os.environ["PYICEBERG_HOME"] = os.getcwd()
 #     warehouse="hdfs://namenode:9000/warehouse",
 # )
 
-# table = catalog.load_table("db1.products")
+# table = catalog.load_table("testdb.employee")
 # print(table.schema())
 
 
-# # # Verify connection by listing namespaces
-# namespaces = catalog.list_namespaces()
-# print("Namespaces:", namespaces)
+# Verify connection by listing namespaces
+namespaces = catalog.list_namespaces()
+print("Namespaces:", namespaces)
 
-# # Create namespace
-# # catalog.create_namespace("sales")
+# Create namespace
+# catalog.create_namespace("sales")
 
-# # Create table
-# schema = Schema(
-#     NestedField(field_id=1, name="id", field_type=IntegerType(), required=True),
-#     NestedField(field_id=2, name="name", field_type=StringType(), required=True),
-#     NestedField(field_id=3, name="value", field_type=FloatType(), required=True),
-# )
+# Create table
+schema = Schema(
+    NestedField(field_id=1, name="id", field_type=IntegerType(), required=True),
+    NestedField(field_id=2, name="name", field_type=StringType(), required=True),
+    NestedField(field_id=3, name="value", field_type=FloatType(), required=True),
+)
 
-# table = catalog.create_table("sales.my_table", schema=schema)
+table = catalog.create_table("sales.my_table", schema=schema)
 
 # df = pq.read_table("./yellow_tripdata_2023-01.parquet")
 

@@ -1,6 +1,6 @@
 catalog:
   default:
-    type: hive
-    uri: thrift://localhost:9083  # Your metastore service
-    # warehouse: hdfs://localhost:9000/warehouse  # Your warehouse location
-    warehouse: "file:///tmp/warehouse"  # Use local filesystem
+    type: sql
+    uri: sqlite:////warehouse/pyiceberg_catalog.db"    
+    warehouse: hdfs://localhost:9000/warehouse  # Your warehouse location
+    # warehouse: "file:///tmp/warehouse"  # Use local filesystem

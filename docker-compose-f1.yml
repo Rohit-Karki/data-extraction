@@ -17,9 +17,14 @@ services:
       - nessie.catalog.secrets.access-key.name=admin
       - nessie.catalog.secrets.access-key.secret=password
       - nessie.catalog.service.s3.default-options.region=us-east-1
-      - nessie.server.authentication.enabled=false
-    networks:
-      - nessie-net
+    #   - nessie.server.authentication.enabled=false
+    # environment:
+    #   - nessie.version.store.type=IN_MEMORY
+    #   - nessie.catalog.default-warehouse=warehouse
+    #   - nessie.catalog.warehouses.warehouse.location=hdfs://namenode:9000/warehouse
+    #   - nessie.server.authentication.enabled=false
+    # networks:
+    #   - nessie-net
 
   minio:
     image: quay.io/minio/minio

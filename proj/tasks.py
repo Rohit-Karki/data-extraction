@@ -64,13 +64,7 @@ def extract_and_load_table(
         if not rows:
             break
 
-        df = pd.DataFrame(rows)
-        # PyIceberg expects columns to match its schema.
-        # You might need to cast/rename DataFrame columns here.
-
-        # Batch write to Iceberg
-        # PyIceberg write_dataframe is a convenient way to batch insert.
-        # It will write Parquet files to the underlying storage (HDFS/S3).
+        df = pd.DataFrame(rows).
         iceberg_table.append(df)  # or write_dataframe(iceberg_table, df)
 
         total_rows += len(rows)
