@@ -4,14 +4,10 @@ from pyiceberg.schema import Schema, NestedField, PrimitiveType
 import mysql.connector
 import pandas as pd
 from datetime import datetime, timezone
+from celery_app.celery_config import app
 
 # Todo Use redis
 last_pulled_timestamps = {}  # {table_name: datetime_object}
-
-app = Celery(
-    "data_pull", broker="redis://localhost:6379/0", backend="redis://localhost:6379/1"
-)
-
 
 def get_last_pulled_timestamp(table_name: str) -> datetime | None:
     """Retrieve the last pulled timestamp for a table from a persistent store."""
@@ -153,3 +149,6 @@ def extract_and_load_incremental(
 # Example of how to call this task (from a client script or another Celery task)
 # app.send_task('data_pull.extract_and_load_incremental',
 #               args=('my_users_table', 'updated_at', my_mysql_config, my_iceberg_config))
+
+
+

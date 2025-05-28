@@ -19,7 +19,7 @@ services:
       mc mb myminio/my-bucket --ignore-existing;
       tail -f /dev/null"
     networks:
-      - nessie-net
+      - dbdl
   
   mysql:
     image: mysql:8.0
@@ -32,15 +32,42 @@ services:
       - MYSQL_USER=user
       - MYSQL_PASSWORD=password
     networks:
-      - nessie-net
+      - dbdl
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
 
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    depends_on:
+      - redis
+      - mysql
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dbdl
+
+  orchestrator:
+    build: .
+    container_name: orchestrator
+    command: python main.py
+    depends_on:
+      - mysql
+      - celery_worker
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dbdl
+
+  
+
   
 
 
 networks:
-  nessie-net:
+  dbdl:
+    driver: bridge
