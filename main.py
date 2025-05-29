@@ -5,16 +5,11 @@ from celery_app.tasks import (
 from database import create_mysql_connection
 import logging
 from datetime import date
+from timestamp_based.main import extract_and_load_table_incremental
 
 
 def orchestrate_ingestion():
-    cnx = create_mysql_connection(
-        # host="localhost",
-        # user="root",
-        # password="rootpassword",
-        # database="mydb",
-        # port=3306,
-    )
+    cnx = create_mysql_connection()
     cursor = cnx.cursor(dictionary=True)
 
     cursor.execute("SELECT * FROM ingestion_metadata WHERE is_running = FALSE")
@@ -55,6 +50,44 @@ def orchestrate_ingestion():
     cnx.close()
 
 
+def orchestrate_incremental_ingestion():
+    cnx = create_mysql_connection()
+    cursor = cnx.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM ingestion_metadata WHERE is_running = FALSE")
+    tables_to_ingest = cursor.fetchall()
+    print("Tables to ingest:", tables_to_ingest)
+
+    for entry in tables_to_ingest:
+        print("Processing table:", entry["table_name"])
+        table_name = entry["table_name"]
+
+        # if table_name == "transactions":
+        #     continue  # Skip the transactions table
+
+        incremental_date = entry["updated_at"]
+        primary_key = entry["primary_key"]
+
+        # primary_key = "App Date"
+        # Mark job as running
+        cursor.execute(
+            "UPDATE ingestion_metadata SET is_running = TRUE, updated_at = NOW() WHERE table_name = %s",
+            (table_name,),
+        )
+        cnx.commit()
+
+        # Dispatch Celery task with starting point
+        result = extract_and_load_table_incremental.apply_async(
+            args=[table_name, primary_key, incremental_date, False]
+        )  # type: ignore
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Dispatching task for {table_name} and task submitted {result.id}")
+
+    cursor.close()
+    cnx.close()
+
+
 def generate_year_partitions(start_year, end_year):
     partitions = []
     for year in range(start_year, end_year + 1):
@@ -74,7 +107,7 @@ def main():
     )
     cursor = cnx.cursor(dictionary=True)
 
-    year_ranges = generate_year_partitions(1998, 2025)
+    year_ranges = generate_year_partitions(2015, 2025)
     for start_date, end_date in year_ranges:
         print(f"Partition: {start_date} to {end_date}")
 

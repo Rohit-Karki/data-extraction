@@ -37,12 +37,6 @@ def extract_and_load_table(
         cursor.execute(
             f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
         )
-        # min_max = cursor.fetchone()
-        # min_id, max_id = (
-        #     min_max[f"MIN({primary_key_column})"],
-        #     min_max[f"MAX({primary_key_column})"],
-        # )
-        # print(f"Table: {table_name}, Primary Key Range: {min_id} to {max_id}")
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
             "default",  # Default catalog name
@@ -143,8 +137,8 @@ def extract_and_load_table_using_partitioning(
     start_date: str,
     end_date: str,
     # parition_key: str,
-    # incremental_date: str
-    # initial_load: bool = True,
+    incremental_date: str = None,
+    initial_load: bool = True,
 ):
     try:
         """
@@ -170,28 +164,43 @@ def extract_and_load_table_using_partitioning(
         # Ensure the namespace exists
         catalog.create_namespace_if_not_exists("sales")
         namespaces = catalog.list_namespaces()
-        # print("Namespaces:", namespaces)
+        print("Namespaces:", namespaces)
 
         # Load or create the Iceberg table
         try:
-            iceberg_table = catalog.load_table(f"sales.{table_name}")
-            scan = iceberg_table.scan()
-            df_read = scan.to_pandas()
-            # print(df_read)
+            print(f"exists {catalog.table_exists(f"sales.{table_name}")}")
+            if catalog.table_exists(f"sales.{table_name}") is True:
+                iceberg_table = catalog.load_table(f"sales.{table_name}")
+            else:
+                schema = (
+                    SCHEMAS["sales"][table_name]
+                    if table_name in SCHEMAS["sales"]
+                    else "sales"
+                )
+                # You'll need to define the Iceberg schema based on MySQL table's schema.
+                # This is crucial and might require pre-analysis or a schema inference step.
+                # print(SCHEMAS["sales"][table_name])
+                # print(f"Using schema: {schema}")
 
-        except Exception:
-            # Basic table creation for demonstration, enhance with schema detection
-            print(f"Table {table_name} not found, creating a basic one.")
-            # You'll need to define the Iceberg schema based on MySQL table's schema.
-            # This is crucial and might require pre-analysis or a schema inference step.
+                # Basic table creation for demonstration, enhance with schema detection
+                iceberg_table = catalog.create_table(
+                    f"sales.{table_name}", schema=schema
+                )
+        except Exception as e:
+            print(f"exception is {e}")
             schema = (
                 SCHEMAS["sales"][table_name]
                 if table_name in SCHEMAS["sales"]
                 else "sales"
             )
+            # You'll need to define the Iceberg schema based on MySQL table's schema.
+            # This is crucial and might require pre-analysis or a schema inference step.
             # print(SCHEMAS["sales"][table_name])
             # print(f"Using schema: {schema}")
+
+            # Basic table creation for demonstration, enhance with schema detection
             iceberg_table = catalog.create_table(f"sales.{table_name}", schema=schema)
+            print(f"Table {table_name} not found, creating a basic one.")
             # raise NotImplementedError(
             #     "Iceberg table creation/schema inference needs to be implemented."
             # )
@@ -206,15 +215,16 @@ def extract_and_load_table_using_partitioning(
             # Build query with optional partitioning
             query = f"SELECT * FROM `{table_name}`"
             where_clauses = []
+            # if done partitioning by primary key or date column
             if primary_key_column and start_date is not None and end_date is not None:
                 where_clauses.append(
                     f"`{primary_key_column}` >= '{start_date}' AND `{primary_key_column}` <= '{end_date}'"
                 )
 
+            # Add WHERE clauses for incremental/date-based
             # where_clauses.append(
-            #     f"last_modified >= '{last_ingested_id}'"
+            #     f"last_modified >= '{incremental_date}'"
             # )
-            # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
