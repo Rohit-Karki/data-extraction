@@ -1,13 +1,13 @@
 from pyiceberg.catalog import load_catalog
-import mysql.connector
 import pandas as pd
 from celery_app.celery_config import app
-from database import create_mysql_connection
+from database import engine, text, read_from_db
 from pyiceberg.schema import Schema
 import pyarrow as pa
 from decimal import Decimal
 from iceberg_table_schema import SCHEMAS
 from celery import shared_task
+from datetime import datetime
 
 
 @shared_task(bind=True)
@@ -21,22 +21,18 @@ def extract_and_load_table_incremental(
     try:
         """
         Extracts data from a MySQL table and loads it into an Iceberg table.
-        Can handle partitioned extraction based on primary key ranges.
+        Handles incremental extraction based on timestamps.
         """
 
-        cnx = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="rootpassword",
-            database="mydb",
-            connection_timeout=60,
-        )
+        # Convert incremental_date to datetime if it's a string
+        if isinstance(incremental_date, str):
+            incremental_date = datetime.fromisoformat(incremental_date)
 
-        # cnx = mysql.connector.connect(**db_config)
-        cursor = cnx.cursor(dictionary=True)  # Get results as dictionaries
-        cursor.execute(
-            f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
-        )
+        # Get min/max values using SQLAlchemy
+        query = f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            min_max = result.fetchone()
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
             "default",  # Default catalog name
@@ -75,23 +71,24 @@ def extract_and_load_table_incremental(
         offset = 0
         total_rows = 0
         chunk_size = 100
-        # last_ingested_id =
 
         while True:
             # Build query with optional partitioning
             query = f"SELECT * FROM `{table_name}`"
             where_clauses = []
             if incremental_date:
-                where_clauses.append(f"`last_modified` >= {incremental_date}")
+                where_clauses.append(f"`last_modified` >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
             print(f"Executing query: {query}")
 
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            # print(f"rows are: {rows}")
+            # Use SQLAlchemy to execute the query
+            with engine.connect() as connection:
+                result = connection.execute(text(query))
+                rows = result.fetchall()
+
             # Convert all Decimal fields to float for Arrow compatibility
             for row in rows:
                 for key, value in row.items():
@@ -101,27 +98,41 @@ def extract_and_load_table_incremental(
             if not rows:
                 break
 
-            last_ingested_id = (
-                rows[-1][primary_key_column] if rows else last_ingested_id
-            )
+            # Process the rows
+            df = pd.DataFrame(rows)
+            print(f"Processing {len(rows)} rows")
 
-            df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
-            iceberg_table.append(df)
+            # Convert DataFrame to Arrow table
+            arrow_table = pa.Table.from_pandas(df)
 
-            total_rows += len(rows)
+            # Write to Iceberg table
+            iceberg_table.write(arrow_table)
+
             offset += chunk_size
-            print(f"Table: {table_name}, Processed: {total_rows} rows")
+            total_rows += len(rows)
 
-        cursor.execute(
-            "UPDATE ingestion_metadata SET last_ingested_id = %s, is_running = FALSE, updated_at = NOW() WHERE table_name = %s",
-            (
-                last_ingested_id,
-                table_name,
-            ),
+        print(f"Total rows processed: {total_rows}")
+
+        # Get the max last_modified time from this batch
+        last_ingested_time = (
+            max(row["last_modified"] for row in rows) if rows else incremental_date
         )
-        cnx.commit()
-        cursor.close()
-        cnx.close()
+
+        # Convert rows to Arrow table and write to Iceberg
+        df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
+        iceberg_table.append(df)
+
+        total_rows += len(rows)
+        offset += chunk_size
+        print(f"Table: {table_name}, Processed: {total_rows} rows")
+
+        # Update ingestion metadata using SQLAlchemy
+        with engine.connect() as connection:
+            query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
+            connection.execute(text(query))
+            connection.commit()
+
         return f"Finished extracting and loading {table_name}: {total_rows} rows."
     except Exception as e:
+        print(f"Error in incremental load: {e}")
         self.retry(exc=e, countdown=60, max_retries=3)

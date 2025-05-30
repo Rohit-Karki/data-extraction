@@ -1,66 +1,98 @@
-import mysql.connector
-from mysql.connector import Error
 import pandas as pd
-from mysql.connector.pooling import MySQLConnectionPool
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import QueuePool
 
-dbconfig = {
+# Database configuration
+DB_CONFIG = {
     "host": "localhost",
     "user": "root",
     "password": "rootpassword",
     "database": "mydb",
 }
 
+# Create engine with connection pooling
+DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,  # Recycle connections every hour
+    pool_timeout=30,
+)
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for declarative models
+Base = declarative_base()
+
 try:
-    cnx_pool = MySQLConnectionPool(pool_name="mypool", pool_size=5, **dbconfig)
-    print("Connection pool created successfully")
+    # Test connection
+    def test_connection():
+        """Test database connection"""
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(text("SELECT VERSION()"))
+                print("MySQL Version:", result.fetchone()[0])
+            print("Connection pool created successfully")
+        except Exception as e:
+            print(f"Error: {e}")
 
-    # Get a connection from the pool
-    conn = cnx_pool.get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT VERSION();")
-    print("MySQL Version:", cursor.fetchone()[0])
-    cursor.close()
+    test_connection()
 
-    # Release the connection back to the pool
-    conn.close()  # This returns the connection to the pool
-    print("Connection released back to pool")
+    def get_db():
+        """Get database session"""
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
 
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
+    def read_from_db(query: str):
+        """Read data from database using pandas"""
+        try:
+            with engine.connect() as connection:
+                return pd.read_sql_query(text(query), connection)
+        except Exception as e:
+            print(f"Error while reading data: {e}")
+            return None
+
+    def execute_query(query: str):
+        """Execute a raw SQL query and return results"""
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(text(query))
+                return result.fetchall()
+        except Exception as e:
+            print(f"Error executing query: {e}")
+            return None
+
+    def update_metadata(
+        table_name: str, last_ingested_time=None, is_running: bool = False
+    ):
+        """Update ingestion metadata for a table"""
+        try:
+            with engine.connect() as connection:
+                if last_ingested_time:
+                    query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = {is_running}, updated_at = NOW() WHERE table_name = '{table_name}'"
+                else:
+                    query = f"UPDATE ingestion_metadata SET is_running = {is_running}, updated_at = NOW() WHERE table_name = '{table_name}'"
+                connection.execute(text(query))
+                connection.commit()
+        except Exception as e:
+            print(f"Error updating metadata: {e}")
+
+            # Example of how to use the session in a context manager:
+            # with SessionLocal() as session:
+            #     result = session.execute(text("SELECT * FROM your_table"))
+            #     data = result.fetchall()
+            return pd.read_sql(query, connection)
+        except Error as e:
+            print(f"Error while reading data: {e}")
+            return None
+
 finally:
-    # No explicit close for MySQLConnectionPool, connections are managed by the pool.
-    # When the pool object goes out of scope, connections are closed.
     pass
-
-
-def create_mysql_connection(
-    # host="localhost",
-    # user="your_username",
-    # password="your_password",
-    # database="your_database",
-):
-    """Create MySQL connection"""
-    try:
-        # connection = mysql.connector.connect(
-        #     host=host, user=user, password=password, database=database
-        # )
-        # # Use the connection pool to get a connection
-        global cnx_pool
-        if not cnx_pool:
-            raise ValueError("Connection pool is not initialized.")
-        connection = cnx_pool.get_connection()
-        if connection.is_connected():
-            print("Successfully connected to MySQL database")
-            return connection
-    except Error as e:
-        print(f"Error while connecting to MySQL: {e}")
-        return None
-
-
-def read_from_mysql(connection, query):
-    """Read data from MySQL using pandas"""
-    try:
-        return pd.read_sql(query, connection)
-    except Error as e:
-        print(f"Error while reading data: {e}")
-        return None

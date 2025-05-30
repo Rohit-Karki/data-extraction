@@ -2,90 +2,67 @@ from celery_app.tasks import (
     extract_and_load_table,
     extract_and_load_table_using_partitioning,
 )
-from database import create_mysql_connection
+from database import engine, text, read_from_db, update_metadata
 import logging
 from datetime import date
 from timestamp_based.main import extract_and_load_table_incremental
 
 
 def orchestrate_ingestion():
-    cnx = create_mysql_connection()
-    cursor = cnx.cursor(dictionary=True)
+    try:
+        # Get tables to ingest
+        query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
+        tables_to_ingest = read_from_db(query).to_dict('records')
+        print("Tables to ingest:", tables_to_ingest)
 
-    cursor.execute("SELECT * FROM ingestion_metadata WHERE is_running = FALSE")
-    tables_to_ingest = cursor.fetchall()
-    print("Tables to ingest:", tables_to_ingest)
+        for entry in tables_to_ingest:
+            print("Processing table:", entry["table_name"])
+            table_name = entry["table_name"]
+            last_ingested_time = entry["last_ingested_time"]
+            primary_key = entry["primary_key"]
 
-    for entry in tables_to_ingest:
-        print("Processing table:", entry["table_name"])
-        table_name = entry["table_name"]
+            # Mark job as running
+            update_metadata(table_name, is_running=True)
 
-        # if table_name == "transactions":
-        #     continue  # Skip the transactions table
+            # Dispatch Celery task with starting point
+            result = extract_and_load_table.apply_async(
+                args=[table_name, primary_key, last_ingested_time]
+            )
 
-        last_id = entry["last_ingested_id"]
-        primary_key = entry["primary_key"]
+            logger = logging.getLogger(__name__)
+            logger.info(f"Dispatching task for {table_name}")
+            print("Task submitted:", result.id)
 
-        # primary_key = "App Date"
-        # Mark job as running
-        cursor.execute(
-            "UPDATE ingestion_metadata SET is_running = TRUE, updated_at = NOW() WHERE table_name = %s",
-            (table_name,),
-        )
-        cnx.commit()
-
-        # Dispatch Celery task with starting point
-        result = extract_and_load_table.apply_async(
-            args=[table_name, primary_key, last_id]
-        )
-        # db_config=db_config,
-        # iceberg_catalog_config=iceberg_catalog_config,
-        # end_id=10,
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"Dispatching task for {table_name}")
-        print("Task submitted:", result.id)
-
-    cursor.close()
-    cnx.close()
+    except Exception as e:
+        print(f"Error in orchestration: {e}")
 
 
 def orchestrate_incremental_ingestion():
-    cnx = create_mysql_connection()
-    cursor = cnx.cursor(dictionary=True)
+    try:
+        # Get tables to ingest
+        query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
+        tables_to_ingest = read_from_db(query).to_dict('records')
+        print("Tables to ingest:", tables_to_ingest)
 
-    cursor.execute("SELECT * FROM ingestion_metadata WHERE is_running = FALSE")
-    tables_to_ingest = cursor.fetchall()
-    print("Tables to ingest:", tables_to_ingest)
+        for entry in tables_to_ingest:
+            print("Processing table:", entry["table_name"])
+            table_name = entry["table_name"]
+            incremental_date = entry["updated_at"]
+            primary_key = entry["primary_key"]
 
-    for entry in tables_to_ingest:
-        print("Processing table:", entry["table_name"])
-        table_name = entry["table_name"]
+            # Mark job as running
+            update_metadata(table_name, is_running=True)
 
-        # if table_name == "transactions":
-        #     continue  # Skip the transactions table
+            # Dispatch Celery task with starting point
+            result = extract_and_load_table_incremental.apply_async(
+                args=[table_name, primary_key, incremental_date, False]
+            )
 
-        incremental_date = entry["updated_at"]
-        primary_key = entry["primary_key"]
+            logger = logging.getLogger(__name__)
+            logger.info(f"Dispatching task for {table_name} and task submitted {result.id}")
 
-        # primary_key = "App Date"
-        # Mark job as running
-        cursor.execute(
-            "UPDATE ingestion_metadata SET is_running = TRUE, updated_at = NOW() WHERE table_name = %s",
-            (table_name,),
-        )
-        cnx.commit()
-
-        # Dispatch Celery task with starting point
-        result = extract_and_load_table_incremental.apply_async(
-            args=[table_name, primary_key, incremental_date, False]
-        )  # type: ignore
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"Dispatching task for {table_name} and task submitted {result.id}")
-
-    cursor.close()
-    cnx.close()
+    except Exception as e:
+        print(f"Error in incremental orchestration: {e}")
 
 
 def generate_year_partitions(start_year, end_year):
@@ -98,15 +75,6 @@ def generate_year_partitions(start_year, end_year):
 
 
 def main():
-    cnx = create_mysql_connection(
-        # host="localhost",
-        # user="root",
-        # password="rootpassword",
-        # database="mydb",
-        # port=3306,
-    )
-    cursor = cnx.cursor(dictionary=True)
-
     year_ranges = generate_year_partitions(2015, 2025)
     for start_date, end_date in year_ranges:
         print(f"Partition: {start_date} to {end_date}")

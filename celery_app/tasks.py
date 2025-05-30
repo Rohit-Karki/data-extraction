@@ -1,13 +1,13 @@
 from pyiceberg.catalog import load_catalog
-import mysql.connector
 import pandas as pd
 from .celery_config import app
-from database import create_mysql_connection
+from database import read_from_db, engine, text
 from pyiceberg.schema import Schema
 import pyarrow as pa
 from decimal import Decimal
 from iceberg_table_schema import SCHEMAS
 from celery import shared_task
+from sqlalchemy import text
 
 
 @shared_task(bind=True)
@@ -15,7 +15,7 @@ def extract_and_load_table(
     self,
     table_name: str,
     primary_key_column,
-    start_id: int,
+    incremental_date: str,
     initial_load: bool = True,
 ):
     try:
@@ -24,19 +24,12 @@ def extract_and_load_table(
         Can handle partitioned extraction based on primary key ranges.
         """
 
-        cnx = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="rootpassword",
-            database="mydb",
-            connection_timeout=60,
-        )
+        # Get min/max values using SQLAlchemy
+        query = f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            min_max = result.fetchone()
 
-        # cnx = mysql.connector.connect(**db_config)
-        cursor = cnx.cursor(dictionary=True)  # Get results as dictionaries
-        cursor.execute(
-            f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
-        )
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
             "default",  # Default catalog name
@@ -57,41 +50,41 @@ def extract_and_load_table(
         except Exception:
             # Basic table creation for demonstration, enhance with schema detection
             print(f"Table {table_name} not found, creating a basic one.")
-            # You'll need to define the Iceberg schema based on MySQL table's schema.
+            # You'll need to define the Iceberg schema based on the source table's schema.
             # This is crucial and might require pre-analysis or a schema inference step.
             schema = (
                 SCHEMAS["sales"][table_name]
                 if table_name in SCHEMAS["sales"]
                 else "sales"
             )
-            # print(SCHEMAS["sales"][table_name])
-            # print(f"Using schema: {schema}")
             iceberg_table = catalog.create_table(f"sales.{table_name}", schema=schema)
-            # raise NotImplementedError(
-            #     "Iceberg table creation/schema inference needs to be implemented."
-            # )
 
         # --- 3. Extract Data in Chunks and Batch Insert ---
         offset = 0
         total_rows = 0
         chunk_size = 100
-        last_ingested_id = start_id if start_id is not None else 0
+        # Fix: removed undefined start_id reference
+        last_ingested_id = 0
 
         while True:
             # Build query with optional partitioning
             query = f"SELECT * FROM `{table_name}`"
             where_clauses = []
-            if primary_key_column and start_id is not None:
-                where_clauses.append(f"`{primary_key_column}` >= {start_id}")
+            if incremental_date:
+                where_clauses.append(f"`last_modified` >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
             print(f"Executing query: {query}")
 
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            # print(f"rows are: {rows}")
+            # Execute query using SQLAlchemy
+            with engine.connect() as connection:
+                result = connection.execute(text(query))
+                rows = result.fetchall()
+                # Convert SQLAlchemy Row objects to dictionaries
+                rows = [dict(row._mapping) for row in rows]
+
             # Convert all Decimal fields to float for Arrow compatibility
             for row in rows:
                 for key, value in row.items():
@@ -101,9 +94,7 @@ def extract_and_load_table(
             if not rows:
                 break
 
-            last_ingested_id = (
-                rows[-1][primary_key_column] if rows else last_ingested_id
-            )
+            incremental_date = rows[-1]["last_modified"] if rows else incremental_date
 
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
             iceberg_table.append(df)
@@ -112,16 +103,11 @@ def extract_and_load_table(
             offset += chunk_size
             print(f"Table: {table_name}, Processed: {total_rows} rows")
 
-        cursor.execute(
-            "UPDATE ingestion_metadata SET last_ingested_id = %s, is_running = FALSE, updated_at = NOW() WHERE table_name = %s",
-            (
-                last_ingested_id,
-                table_name,
-            ),
-        )
-        cnx.commit()
-        cursor.close()
-        cnx.close()
+        # Update ingestion metadata using SQLAlchemy
+        with engine.connect() as connection:
+            query = f"UPDATE ingestion_metadata SET last_ingested_time = '{incremental_date}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
+            connection.execute(text(query))
+            connection.commit()
         return f"Finished extracting and loading {table_name}: {total_rows} rows."
     except Exception as e:
         self.retry(exc=e, countdown=60, max_retries=3)
@@ -132,30 +118,17 @@ def extract_and_load_table_using_partitioning(
     self,
     table_name: str,
     primary_key_column,
-    # start_id: int,
-    # date_column: str,
     start_date: str,
     end_date: str,
-    # parition_key: str,
     incremental_date: str = None,
     initial_load: bool = True,
 ):
     try:
         """
-        Extracts data from a MySQL table and loads it into an Iceberg table.
-        Can handle partitioned extraction based on primary key ranges.
+        Extracts data from a database table and loads it into an Iceberg table.
+        Handles incremental extraction based on timestamps.
         """
 
-        cnx = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="rootpassword",
-            database="mydb",
-            connection_timeout=60,
-        )
-
-        # cnx = mysql.connector.connect(**db_config)
-        cursor = cnx.cursor(dictionary=True)  # Get results as dictionaries
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
             "default",  # Default catalog name
@@ -168,7 +141,7 @@ def extract_and_load_table_using_partitioning(
 
         # Load or create the Iceberg table
         try:
-            print(f"exists {catalog.table_exists(f"sales.{table_name}")}")
+            print(f"exists {catalog.table_exists(f'sales.{table_name}')}")
             if catalog.table_exists(f"sales.{table_name}") is True:
                 iceberg_table = catalog.load_table(f"sales.{table_name}")
             else:
@@ -177,11 +150,6 @@ def extract_and_load_table_using_partitioning(
                     if table_name in SCHEMAS["sales"]
                     else "sales"
                 )
-                # You'll need to define the Iceberg schema based on MySQL table's schema.
-                # This is crucial and might require pre-analysis or a schema inference step.
-                # print(SCHEMAS["sales"][table_name])
-                # print(f"Using schema: {schema}")
-
                 # Basic table creation for demonstration, enhance with schema detection
                 iceberg_table = catalog.create_table(
                     f"sales.{table_name}", schema=schema
@@ -193,17 +161,9 @@ def extract_and_load_table_using_partitioning(
                 if table_name in SCHEMAS["sales"]
                 else "sales"
             )
-            # You'll need to define the Iceberg schema based on MySQL table's schema.
-            # This is crucial and might require pre-analysis or a schema inference step.
-            # print(SCHEMAS["sales"][table_name])
-            # print(f"Using schema: {schema}")
-
             # Basic table creation for demonstration, enhance with schema detection
             iceberg_table = catalog.create_table(f"sales.{table_name}", schema=schema)
             print(f"Table {table_name} not found, creating a basic one.")
-            # raise NotImplementedError(
-            #     "Iceberg table creation/schema inference needs to be implemented."
-            # )
 
         # --- 3. Extract Data in Chunks and Batch Insert ---
         offset = 0
@@ -229,10 +189,13 @@ def extract_and_load_table_using_partitioning(
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
             print(f"Executing query: {query}")
-            cursor.execute(query)
-            rows = cursor.fetchall()
 
-            # print(f"rows are: {rows}")
+            # Execute query using SQLAlchemy instead of cursor
+            with engine.connect() as connection:
+                result = connection.execute(text(query))
+                rows = result.fetchall()
+                # Convert SQLAlchemy Row objects to dictionaries
+                rows = [dict(row._mapping) for row in rows]
 
             # Convert all Decimal fields to float for Arrow compatibility
             for row in rows:
@@ -254,16 +217,11 @@ def extract_and_load_table_using_partitioning(
             offset += chunk_size
             print(f"Table: {table_name}, Processed: {total_rows} rows")
 
-        cursor.execute(
-            "UPDATE ingestion_metadata SET last_ingested_id = %s, is_running = FALSE, updated_at = NOW() WHERE table_name = %s",
-            (
-                0,
-                table_name,
-            ),
-        )
-        cnx.commit()
-        cursor.close()
-        cnx.close()
+        # Update ingestion metadata using SQLAlchemy
+        with engine.connect() as connection:
+            query = f"UPDATE ingestion_metadata SET last_ingested_time = '{end_date}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
+            connection.execute(text(query))
+            connection.commit()
         return f"Finished extracting and loading {table_name}: {total_rows} rows."
     except Exception as e:
         self.retry(exc=e, countdown=60, max_retries=3)
