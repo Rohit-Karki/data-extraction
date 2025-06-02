@@ -51,6 +51,30 @@ services:
     networks:
       - dbdl
 
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - 5432:5432
+    volumes:
+      - ~/apps/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=rootpasword
+      - POSTGRES_USER=root
+      - POSTGRES_DB=mydb
+    networks:
+      - dbdl
+
+  oracle-db:
+    image: container-registry.oracle.com/database/express:latest
+    container_name: oracle-demo
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=YourPassword123
+    volumes:
+      - oracle-data:/opt/oracle/oradata # Path for persistent data
+
+
   orchestrator:
     build: .
     container_name: orchestrator
@@ -63,9 +87,8 @@ services:
     networks:
       - dbdl
 
-  
-
-  
+volumes:
+  oracle-data:
 
 
 networks:

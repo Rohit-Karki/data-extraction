@@ -71,25 +71,26 @@ try:
             return None
 
     def update_metadata(
-        table_name: str, last_ingested_time=None, is_running: bool = False
+        table_name: str | None, last_ingested_time=None, is_running: bool = False
     ):
         """Update ingestion metadata for a table"""
         try:
             with engine.connect() as connection:
                 if last_ingested_time:
                     query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = {is_running}, updated_at = NOW() WHERE table_name = '{table_name}'"
+                elif table_name is None:
+                    query = f"UPDATE ingestion_metadata SET is_running = {is_running}, updated_at = NOW()"
                 else:
                     query = f"UPDATE ingestion_metadata SET is_running = {is_running}, updated_at = NOW() WHERE table_name = '{table_name}'"
                 connection.execute(text(query))
                 connection.commit()
         except Exception as e:
             print(f"Error updating metadata: {e}")
-
             # Example of how to use the session in a context manager:
             # with SessionLocal() as session:
             #     result = session.execute(text("SELECT * FROM your_table"))
             #     data = result.fetchall()
-            return pd.read_sql(query, connection)
+            return None
         except Error as e:
             print(f"Error while reading data: {e}")
             return None

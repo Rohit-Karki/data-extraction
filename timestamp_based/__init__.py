@@ -1,1 +1,0 @@
-from .main import extract_and_load_table_incremental

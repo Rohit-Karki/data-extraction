@@ -1,8 +1,4 @@
 from pyiceberg.catalog import load_catalog
-import pandas as pd
-from celery_app.celery_config import app
-
-# from database import engine, text, read_from_db
 from pyiceberg.schema import Schema
 import pyarrow as pa
 from decimal import Decimal
@@ -11,6 +7,7 @@ from celery import shared_task
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
+from database import update_metadata
 
 
 @shared_task(bind=True)
@@ -19,7 +16,9 @@ def extract_and_load_table_incremental(
     table_name: str,
     primary_key_column,
     incremental_date,
+    database_url: str,
     initial_load: bool = True,
+    database_name: str = "postgres",
 ):
     try:
         # Database configuration
@@ -29,9 +28,8 @@ def extract_and_load_table_incremental(
             "password": "rootpassword",
             "database": "mydb",
         }
-
         # Create engine with connection pooling
-        DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+        DATABASE_URL = database_url
         engine = create_engine(
             DATABASE_URL,
             poolclass=QueuePool,
@@ -98,10 +96,10 @@ def extract_and_load_table_incremental(
 
         while True:
             # Build query with optional partitioning
-            query = f"SELECT * FROM `{table_name}`"
+            query = f"SELECT * FROM {table_name}"
             where_clauses = []
             if initial_load is False and incremental_date:
-                where_clauses.append(f"`last_modified` >= '{incremental_date}'")
+                where_clauses.append(f"last_modified >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
@@ -113,7 +111,7 @@ def extract_and_load_table_incremental(
                 result = connection.execute(text(query))
                 rows = result.fetchall()
                 rows = [dict(row._mapping) for row in rows]
-                print(f"Query executed successfully, fetching results... {len(rows)}")
+                # print(f"Query executed successfully, fetching results... {len(rows)}")
 
             # Convert all Decimal fields to float for Arrow compatibility
 
@@ -136,15 +134,20 @@ def extract_and_load_table_incremental(
             # Write to Iceberg table
             iceberg_table.append(df)
 
+            last_ingested_time = (
+                max(row["last_modified"] for row in rows) if rows else incremental_date
+            )
+            print(f"Last ingested time: {last_ingested_time}")
             offset += chunk_size
             total_rows += len(rows)
 
         print(f"Total rows processed: {total_rows}")
 
-        # Get the max last_modified time from this batch
         last_ingested_time = (
             max(row["last_modified"] for row in rows) if rows else incremental_date
         )
+        print(f"Last ingested time: {last_ingested_time}")
+        # Get the max last_modified time from this batch
 
         # Convert rows to Arrow table and write to Iceberg
         # df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
@@ -154,11 +157,16 @@ def extract_and_load_table_incremental(
         offset += chunk_size
         print(f"Table: {table_name}, Processed: {total_rows} rows")
 
+        update_metadata(
+            table_name,
+            last_ingested_time=last_ingested_time,
+            is_running=False,
+        )
         # Update ingestion metadata using SQLAlchemy
-        with engine.connect() as connection:
-            query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
-            connection.execute(text(query))
-            connection.commit()
+        # with engine.connect() as connection:
+        #     query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
+        #     connection.execute(text(query))
+        #     connection.commit()
 
         return f"Finished extracting and loading {table_name}: {total_rows} rows."
     except Exception as e:

@@ -7,7 +7,8 @@ import pyarrow as pa
 from decimal import Decimal
 from iceberg_table_schema import SCHEMAS
 from celery import shared_task
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
 
 
 @shared_task(bind=True)
@@ -16,7 +17,6 @@ def extract_and_load_table(
     table_name: str,
     primary_key_column,
     incremental_date: str,
-    initial_load: bool = True,
 ):
     try:
         """
@@ -42,7 +42,25 @@ def extract_and_load_table(
         database_name, database_url = metadata
 
         # Create engine with specific database URL
-        source_engine = create_engine(database_url)
+        # Database configuration
+        DB_CONFIG = {
+            "host": "localhost",
+            "user": "root",
+            "password": "rootpassword",
+            "database": "mydb",
+        }
+
+        # Create engine with connection pooling
+        DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+        source_engine = create_engine(
+            DATABASE_URL,
+            poolclass=QueuePool,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,  # Verify connections before use
+            pool_recycle=3600,  # Recycle connections every hour
+            pool_timeout=30,
+        )
 
         # # Get min/max values from source database
         # with source_engine.connect() as connection:
@@ -199,7 +217,6 @@ def extract_and_load_table_using_partitioning(
                     f"`{primary_key_column}` >= '{start_date}' AND `{primary_key_column}` <= '{end_date}'"
                 )
 
-            
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"

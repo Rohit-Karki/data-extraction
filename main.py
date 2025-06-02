@@ -2,10 +2,10 @@ from celery_app.tasks import (
     extract_and_load_table,
     extract_and_load_table_using_partitioning,
 )
+from celery_app.incremental import extract_and_load_table_incremental
 from database import engine, text, read_from_db, update_metadata
 import logging
 from datetime import date
-from timestamp_based import extract_and_load_table_incremental
 
 
 def orchestrate_ingestion():
@@ -17,6 +17,8 @@ def orchestrate_ingestion():
 
         for entry in tables_to_ingest:
             print("Processing table:", entry["table_name"])
+            database_name = entry["database_name"]
+            database_url = entry["database_url"]
             table_name = entry["table_name"]
             last_ingested_time = entry["last_ingested_time"]
             primary_key = entry["primary_key"]
@@ -35,6 +37,8 @@ def orchestrate_ingestion():
 
     except Exception as e:
         print(f"Error in orchestration: {e}")
+    finally:
+        update_metadata(None, is_running=False)
 
 
 def orchestrate_incremental_ingestion():
@@ -46,6 +50,8 @@ def orchestrate_incremental_ingestion():
 
         for entry in tables_to_ingest:
             print("Processing table:", entry["table_name"])
+            database_name = entry["database_name"]
+            database_url = entry["database_url"]
             table_name = entry["table_name"]
             incremental_date = entry["last_ingested_time"]
             primary_key = entry["primary_key"]
@@ -54,7 +60,7 @@ def orchestrate_incremental_ingestion():
 
             # Dispatch Celery task with starting point
             result = extract_and_load_table_incremental.apply_async(
-                args=[table_name, primary_key, incremental_date, False]
+                args=[table_name, primary_key, incremental_date, database_url, False]
             )
 
             logger = logging.getLogger(__name__)
@@ -64,6 +70,8 @@ def orchestrate_incremental_ingestion():
 
     except Exception as e:
         print(f"Error in incremental orchestration: {e}")
+    finally:
+        update_metadata(None, is_running=False)
 
 
 def generate_year_partitions(start_year, end_year):

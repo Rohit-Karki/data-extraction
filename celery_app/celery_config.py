@@ -4,7 +4,7 @@ app = Celery(
     "etl_tasks",
     broker="redis://localhost:6379/0",  # Redis running in Docker
     backend="redis://localhost:6379/0",
-    include=["celery_app.tasks", "timestamp_based"],  # Include your tasks module
+    include=["celery_app.tasks", "celery_app.incremental"],  # Include your tasks module
 )
 
 # Optional: Set task settings
