@@ -1,13 +1,16 @@
 from pyiceberg.catalog import load_catalog
 import pandas as pd
 from celery_app.celery_config import app
-from database import engine, text, read_from_db
+
+# from database import engine, text, read_from_db
 from pyiceberg.schema import Schema
 import pyarrow as pa
 from decimal import Decimal
 from iceberg_table_schema import SCHEMAS
 from celery import shared_task
 from datetime import datetime
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
 
 
 @shared_task(bind=True)
@@ -19,20 +22,36 @@ def extract_and_load_table_incremental(
     initial_load: bool = True,
 ):
     try:
+        # Database configuration
+        DB_CONFIG = {
+            "host": "localhost",
+            "user": "root",
+            "password": "rootpassword",
+            "database": "mydb",
+        }
+
+        # Create engine with connection pooling
+        DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+        engine = create_engine(
+            DATABASE_URL,
+            poolclass=QueuePool,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,  # Verify connections before use
+            pool_recycle=3600,  # Recycle connections every hour
+            pool_timeout=30,
+        )
         """
         Extracts data from a MySQL table and loads it into an Iceberg table.
         Handles incremental extraction based on timestamps.
         """
 
         # Convert incremental_date to datetime if it's a string
-        if isinstance(incremental_date, str):
-            incremental_date = datetime.fromisoformat(incremental_date)
+        if initial_load is False:
+            print("Incremental load detected")
+            if isinstance(incremental_date, str):
+                incremental_date = datetime.fromisoformat(incremental_date)
 
-        # Get min/max values using SQLAlchemy
-        query = f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
-        with engine.connect() as connection:
-            result = connection.execute(text(query))
-            min_max = result.fetchone()
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
             "default",  # Default catalog name
@@ -46,26 +65,31 @@ def extract_and_load_table_incremental(
         # Load or create the Iceberg table
         try:
             iceberg_table = catalog.load_table(f"sales.{table_name}")
-            scan = iceberg_table.scan()
-            df_read = scan.to_pandas()
-            print(df_read)
+
+            # For testing only, remove in production
+            # print(f"Loaded Iceberg table: {iceberg_table.name}")
+            # Uncomment below lines to read data from Iceberg table
+            # scan = iceberg_table.scan()
+            # df_read = scan.to_pandas()
+            # print(df_read)
 
         except Exception:
             # Basic table creation for demonstration, enhance with schema detection
             print(f"Table {table_name} not found, creating a basic one.")
             # You'll need to define the Iceberg schema based on MySQL table's schema.
             # This is crucial and might require pre-analysis or a schema inference step.
+            # For now using from a schema dictionary
             schema = (
                 SCHEMAS["sales"][table_name]
                 if table_name in SCHEMAS["sales"]
-                else "sales"
+                else "transactions"
             )
             # print(SCHEMAS["sales"][table_name])
             # print(f"Using schema: {schema}")
             iceberg_table = catalog.create_table(f"sales.{table_name}", schema=schema)
-            # raise NotImplementedError(
-            #     "Iceberg table creation/schema inference needs to be implemented."
-            # )
+            raise NotImplementedError(
+                "Iceberg table creation/schema inference needs to be implemented."
+            )
 
         # --- 3. Extract Data in Chunks and Batch Insert ---
         offset = 0
@@ -76,7 +100,7 @@ def extract_and_load_table_incremental(
             # Build query with optional partitioning
             query = f"SELECT * FROM `{table_name}`"
             where_clauses = []
-            if incremental_date:
+            if initial_load is False and incremental_date:
                 where_clauses.append(f"`last_modified` >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
@@ -88,6 +112,10 @@ def extract_and_load_table_incremental(
             with engine.connect() as connection:
                 result = connection.execute(text(query))
                 rows = result.fetchall()
+                rows = [dict(row._mapping) for row in rows]
+                print(f"Query executed successfully, fetching results... {len(rows)}")
+
+            # Convert all Decimal fields to float for Arrow compatibility
 
             # Convert all Decimal fields to float for Arrow compatibility
             for row in rows:
@@ -99,14 +127,14 @@ def extract_and_load_table_incremental(
                 break
 
             # Process the rows
-            df = pd.DataFrame(rows)
-            print(f"Processing {len(rows)} rows")
-
+            # df = pd.DataFrame(rows)
+            # print(f"Processing {len(rows)} rows")
+            df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
             # Convert DataFrame to Arrow table
-            arrow_table = pa.Table.from_pandas(df)
+            # arrow_table = pa.Table.from_pandas(df)
 
             # Write to Iceberg table
-            iceberg_table.write(arrow_table)
+            iceberg_table.append(df)
 
             offset += chunk_size
             total_rows += len(rows)
@@ -119,8 +147,8 @@ def extract_and_load_table_incremental(
         )
 
         # Convert rows to Arrow table and write to Iceberg
-        df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
-        iceberg_table.append(df)
+        # df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
+        # iceberg_table.append(df)
 
         total_rows += len(rows)
         offset += chunk_size

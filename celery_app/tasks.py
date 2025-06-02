@@ -25,14 +25,33 @@ def extract_and_load_table(
         """
 
         # Get min/max values using SQLAlchemy
-        query = f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
+        # query = f"SELECT MIN({primary_key_column}), MAX({primary_key_column}) FROM `{table_name}`"
+        # Get database metadata from ingestion_metadata table
+        metadata_query = f"""
+            SELECT database_name, database_url 
+            FROM ingestion_metadata 
+            WHERE table_name = '{table_name}'
+        """
         with engine.connect() as connection:
-            result = connection.execute(text(query))
-            min_max = result.fetchone()
+            result = connection.execute(text(metadata_query))
+            metadata = result.fetchone()
+
+        if not metadata:
+            raise ValueError(f"No metadata found for table: {table_name}")
+
+        database_name, database_url = metadata
+
+        # Create engine with specific database URL
+        source_engine = create_engine(database_url)
+
+        # # Get min/max values from source database
+        # with source_engine.connect() as connection:
+        #     result = connection.execute(text(query))
+        #     min_max = result.fetchone()
 
         # --- 2. Load Iceberg Catalog ---
         catalog = load_catalog(
-            "default",  # Default catalog name
+            "default",
         )
 
         # Ensure the namespace exists
@@ -63,23 +82,22 @@ def extract_and_load_table(
         offset = 0
         total_rows = 0
         chunk_size = 100
-        # Fix: removed undefined start_id reference
         last_ingested_id = 0
 
         while True:
             # Build query with optional partitioning
             query = f"SELECT * FROM `{table_name}`"
             where_clauses = []
+            # WHERE clauses for incremental/date-based
             if incremental_date:
                 where_clauses.append(f"`last_modified` >= '{incremental_date}'")
-            # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
             print(f"Executing query: {query}")
 
             # Execute query using SQLAlchemy
-            with engine.connect() as connection:
+            with source_engine.connect() as connection:
                 result = connection.execute(text(query))
                 rows = result.fetchall()
                 # Convert SQLAlchemy Row objects to dictionaries
@@ -94,7 +112,7 @@ def extract_and_load_table(
             if not rows:
                 break
 
-            incremental_date = rows[-1]["last_modified"] if rows else incremental_date
+            # incremental_date = rows[-1]["last_modified"] if rows else incremental_date
 
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
             iceberg_table.append(df)
@@ -181,10 +199,7 @@ def extract_and_load_table_using_partitioning(
                     f"`{primary_key_column}` >= '{start_date}' AND `{primary_key_column}` <= '{end_date}'"
                 )
 
-            # Add WHERE clauses for incremental/date-based
-            # where_clauses.append(
-            #     f"last_modified >= '{incremental_date}'"
-            # )
+            
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
             query += f" LIMIT {chunk_size} OFFSET {offset}"
