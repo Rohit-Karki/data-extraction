@@ -8,6 +8,8 @@ import logging
 from datetime import date
 
 
+# The ingestion orchestration function that manages the ingestion process
+# and dispatches tasks to Celery workers.
 def orchestrate_ingestion():
     try:
         # Get tables to ingest
