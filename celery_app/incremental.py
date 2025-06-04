@@ -110,8 +110,8 @@ def extract_and_load_table_incremental(
             with engine.connect() as connection:
                 result = connection.execute(text(query))
                 rows = result.fetchall()
+                print(f"Query executed successfully, fetching results... {rows}")
                 rows = [dict(row._mapping) for row in rows]
-                # print(f"Query executed successfully, fetching results... {len(rows)}")
 
             # Convert all Decimal fields to float for Arrow compatibility
 

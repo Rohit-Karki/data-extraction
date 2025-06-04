@@ -82,7 +82,7 @@ def extract_and_load_table(
             iceberg_table = catalog.load_table(f"sales.{table_name}")
             scan = iceberg_table.scan()
             df_read = scan.to_pandas()
-            print(df_read)
+            # print(df_read)
 
         except Exception:
             # Basic table creation for demonstration, enhance with schema detection
@@ -133,7 +133,7 @@ def extract_and_load_table(
             # incremental_date = rows[-1]["last_modified"] if rows else incremental_date
 
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
-            iceberg_table.append(df)
+            iceberg_table.upsert(df)
 
             total_rows += len(rows)
             offset += chunk_size

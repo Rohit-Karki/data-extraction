@@ -1,5 +1,11 @@
 from pyiceberg.schema import Schema
-from pyiceberg.types import NestedField, IntegerType, StringType, DoubleType
+from pyiceberg.types import (
+    NestedField,
+    IntegerType,
+    StringType,
+    DoubleType,
+    TimestampType,
+)
 
 SCHEMAS = {
     "sales": {
@@ -10,48 +16,54 @@ SCHEMAS = {
         ),
         "Drivers": Schema(
             NestedField(
-                field_id=1, name="App No", field_type=StringType(), required=False
+                field_id=1, name="app_no", field_type=StringType(), required=False
             ),
             NestedField(
-                field_id=2, name="Type", field_type=StringType(), required=False
+                field_id=2, name="type", field_type=StringType(), required=False
             ),
             NestedField(
-                field_id=3, name="App Date", field_type=StringType(), required=False
+                field_id=3, name="app_date", field_type=StringType(), required=False
             ),
             NestedField(
-                field_id=4, name="Status", field_type=StringType(), required=False
+                field_id=4, name="status", field_type=StringType(), required=False
             ),
             NestedField(
                 field_id=5,
-                name="FRU Interview Scheduled",
+                name="fru_interview_scheduled",
                 field_type=StringType(),
                 required=False,
             ),
             NestedField(
-                field_id=6, name="Drug Test", field_type=StringType(), required=False
+                field_id=6, name="drug_test", field_type=StringType(), required=False
             ),
             NestedField(
-                field_id=7, name="WAV Course", field_type=StringType(), required=False
+                field_id=7, name="wav_course", field_type=StringType(), required=False
             ),
             NestedField(
                 field_id=8,
-                name="Defensive Driving",
+                name="defensive_driving",
                 field_type=StringType(),
                 required=False,
             ),
             NestedField(
-                field_id=9, name="Driver Exam", field_type=StringType(), required=False
+                field_id=9, name="driver_exam", field_type=StringType(), required=False
             ),
             NestedField(
                 field_id=10,
-                name="Medical Clearance Form",
+                name="medical_clearance_form",
                 field_type=StringType(),
                 required=False,
             ),
             NestedField(
                 field_id=11,
-                name="Last Updated",
+                name="last_updated",
                 field_type=StringType(),
+                required=False,
+            ),
+            NestedField(
+                field_id=11,
+                name="last_modified",
+                field_type=TimestampType(),
                 required=False,
             ),
         ),
