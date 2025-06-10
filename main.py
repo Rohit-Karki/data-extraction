@@ -48,20 +48,23 @@ def orchestrate_incremental_ingestion():
         # Get tables to ingest
         query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
         tables_to_ingest = read_from_db(query).to_dict("records")
-        print("Tables to ingest:", tables_to_ingest)
+        # print("Tables to ingest:", tables_to_ingest)
 
         for entry in tables_to_ingest:
             table_name = entry["table_name"]
-            if (
-                table_name == "employees"
-                or table_name == "ai_job_dataset"
-                or table_name == "transactions"
-            ):
-                continue
+            # if table_name == "ai_job_dataset" or table_name == "transactions":
+            #     continue
             print("Processing table:", entry["table_name"])
             database_name = entry["database_name"]
             database_url = entry["database_url"]
-            # database_url = "oracle+oracledb://test_user:strong_pass@127.0.0.1:1521/?service_name=freepdb1"
+            # database_url = (
+            #     f"{database_url}?autocommit=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useCompression=true"
+            #     if database_name == "mysql"
+            #     else database_url
+            # )
+            # database_url = (
+            #     "oracle+oracledb://system:testpassword@0.0.0.0:1521/?service_name=free"
+            # )
             incremental_date = entry["last_ingested_time"]
             primary_key = entry["primary_key"]
             # Mark job as running
@@ -69,7 +72,14 @@ def orchestrate_incremental_ingestion():
 
             # Dispatch Celery task with starting point
             result = extract_and_load_table_incremental.apply_async(
-                args=[table_name, primary_key, incremental_date, database_url, False]
+                args=[
+                    table_name,
+                    primary_key,
+                    incremental_date,
+                    database_url,
+                    False,
+                    database_name,
+                ]
             )
 
             logger = logging.getLogger(__name__)

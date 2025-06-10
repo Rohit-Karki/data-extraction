@@ -46,7 +46,7 @@ def extract_and_load_table_incremental(
 
         # Convert incremental_date to datetime if it's a string
         if initial_load is False:
-            print("Incremental load detected")
+            # print("Incremental load detected")
             if isinstance(incremental_date, str):
                 incremental_date = datetime.fromisoformat(incremental_date)
 
@@ -58,7 +58,7 @@ def extract_and_load_table_incremental(
         # Ensure the namespace exists
         catalog.create_namespace_if_not_exists("sales")
         namespaces = catalog.list_namespaces()
-        print("Namespaces:", namespaces)
+        # print("Namespaces:", namespaces)
 
         # Load or create the Iceberg table
         try:
@@ -73,44 +73,48 @@ def extract_and_load_table_incremental(
 
         except Exception:
             # Basic table creation for demonstration, enhance with schema detection
-            print(f"Table {table_name} not found, creating a basic one.")
+            # print(f"Table {table_name} not found, creating a basic one.")
             # You'll need to define the Iceberg schema based on MySQL table's schema.
             # This is crucial and might require pre-analysis or a schema inference step.
             # For now using from a schema dictionary
             schema = (
                 SCHEMAS["sales"][table_name]
-                if table_name in SCHEMAS["sales"]
-                else "transactions"
+                # if table_name in SCHEMAS["sales"]
+                # else "transactions"
             )
-            # print(SCHEMAS["sales"][table_name])
-            # print(f"Using schema: {schema}")
             iceberg_table = catalog.create_table(f"sales.{table_name}", schema=schema)
             raise NotImplementedError(
                 "Iceberg table creation/schema inference needs to be implemented."
             )
 
         # --- 3. Extract Data in Chunks and Batch Insert ---
+        # print(f"Using schema:")
+        # print(SCHEMAS["sales"][table_name])
         offset = 0
         total_rows = 0
-        chunk_size = 100
+        chunk_size = 1000
 
         while True:
             # Build query with optional partitioning
             query = f"SELECT * FROM {table_name}"
             where_clauses = []
-            if initial_load is False and incremental_date:
-                where_clauses.append(f"last_modified >= '{incremental_date}'")
+            # if initial_load is False and incremental_date and database_name != "oracle":
+            #     where_clauses.append(f"last_modified >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
-            query += f" LIMIT {chunk_size} OFFSET {offset}"
-            print(f"Executing query: {query}")
+            if database_name == "oracle":
+                # pass
+                query += f" OFFSET {offset} ROWS FETCH NEXT {chunk_size} ROWS ONLY"
+            else:
+                query += f" LIMIT {chunk_size} OFFSET {offset}"
+            # print(f"Executing query: {query}")
 
             # Use SQLAlchemy to execute the query
             with engine.connect() as connection:
                 result = connection.execute(text(query))
                 rows = result.fetchall()
-                # print(f"Query executed successfully, fetching results... {rows}")
+
                 rows = [dict(row._mapping) for row in rows]
 
             # Convert all Decimal fields to float for Arrow compatibility
@@ -120,7 +124,7 @@ def extract_and_load_table_incremental(
                 for key, value in row.items():
                     if isinstance(value, Decimal):
                         row[key] = float(value)
-
+            # print(f"Fetched {len(rows)} rows from the database.")
             if not rows:
                 break
 
@@ -134,18 +138,18 @@ def extract_and_load_table_incremental(
             # Write to Iceberg table
             iceberg_table.append(df)
 
-            last_ingested_time = (
-                max(row["last_modified"] for row in rows) if rows else incremental_date
-            )
+            # iceberg_table.upsert(df)
+
+            # last_ingested_time = (
+            #     max(row["last_modified"] for row in rows) if rows else incremental_date
+            # )
+            last_ingested_time = incremental_date
             # print(f"Last ingested time: {last_ingested_time}")
             offset += chunk_size
             total_rows += len(rows)
 
         print(f"Total rows processed: {total_rows}")
 
-        last_ingested_time = (
-            max(row["last_modified"] for row in rows) if rows else incremental_date
-        )
         # print(f"Last ingested time: {last_ingested_time}")
         # Get the max last_modified time from this batch
 

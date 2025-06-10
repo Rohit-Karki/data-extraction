@@ -36,10 +36,13 @@ SCHEMAS = {
         "employees": Schema(
             NestedField(field_id=1, name="id", field_type=IntegerType(), required=True),
             NestedField(
-                field_id=2, name="category", field_type=StringType(), required=True
+                field_id=3, name="name", field_type=StringType(), required=True
             ),
             NestedField(
-                field_id=3, name="amount", field_type=FloatType(), required=True
+                field_id=2, name="department", field_type=StringType(), required=True
+            ),
+            NestedField(
+                field_id=3, name="salary", field_type=FloatType(), required=True
             ),
         ),
         "transactions": Schema(
@@ -100,6 +103,27 @@ SCHEMAS = {
                 required=False,
             ),
         ),
+        "ai_job_dataset": Schema(
+            NestedField(1, "job_id", StringType(), required=True),
+            NestedField(2, "job_title", StringType(), required=True),
+            NestedField(3, "salary_usd", StringType(), required=False),
+            NestedField(4, "salary_currency", StringType(), required=False),
+            NestedField(5, "experience_level", StringType(), required=False),
+            NestedField(6, "employment_type", StringType(), required=False),
+            NestedField(7, "company_location", StringType(), required=False),
+            NestedField(8, "company_size", StringType(), required=False),
+            NestedField(9, "employee_residence", StringType(), required=False),
+            NestedField(10, "remote_ratio", StringType(), required=False),
+            NestedField(11, "required_skills", StringType(), required=False),
+            NestedField(12, "education_required", StringType(), required=False),
+            NestedField(13, "years_experience", StringType(), required=False),
+            NestedField(14, "industry", StringType(), required=False),
+            NestedField(15, "posting_date", StringType(), required=False),
+            NestedField(16, "application_deadline", StringType(), required=False),
+            NestedField(17, "job_description_length", StringType(), required=False),
+            NestedField(18, "benefits_score", StringType(), required=False),
+            NestedField(19, "company_name", StringType(), required=False),
+        ),
         # "orders": Schema(
         #     NestedField(1, "order_id", IntegerType(), required=True),
         #     NestedField(2, "customer_id", IntegerType(), required=True),
@@ -107,3 +131,5 @@ SCHEMAS = {
         # ),
     },
 }
+
+print(SCHEMAS["sales"])
