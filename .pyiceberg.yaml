@@ -1,7 +1,7 @@
 # catalog:
 #   default:
 #     type: sql
-#     uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db"
+#     uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db
 #     # warehouse: file://///tmp/warehouse
 #     warehouse: "s3://my-bucket"  # S3 path (MinIO bucket prefix)
 #     s3.endpoint: "http://127.0.0.1:9000"  # MinIO endpoint
@@ -13,7 +13,7 @@
 catalog:
   default:
     type: sql
-    uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db"
+    uri: "sqlite:////tmp/warehouse/pyiceberg_catalog.db"
     warehouse: "hdfs://localhost:9000/user/hive/warehouse"  # HDFS warehouse path
     # Additional Hive Metastore properties (optional)
     # hive.metastore.uris: "thrift://localhost:9083"
