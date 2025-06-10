@@ -1,11 +1,24 @@
+# catalog:
+#   default:
+#     type: sql
+#     uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db"
+#     # warehouse: file://///tmp/warehouse
+#     warehouse: "s3://my-bucket"  # S3 path (MinIO bucket prefix)
+#     s3.endpoint: "http://127.0.0.1:9000"  # MinIO endpoint
+#     s3.access-key-id: "admin"  # Replace with your MinIO access key
+#     s3.secret-access-key: "password"  # Replace with your MinIO secret key
+#     s3.region: "us-east-1"  # Dummy region (if required)
+#     s3.path-style-access: "true"  # Important for MinIO
+
 catalog:
   default:
     type: sql
     uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db"
-    # warehouse: file://///tmp/warehouse
-    warehouse: "s3://my-bucket"  # S3 path (MinIO bucket prefix)
-    s3.endpoint: "http://127.0.0.1:9000"  # MinIO endpoint
-    s3.access-key-id: "admin"  # Replace with your MinIO access key
-    s3.secret-access-key: "password"  # Replace with your MinIO secret key
-    s3.region: "us-east-1"  # Dummy region (if required)
-    s3.path-style-access: "true"  # Important for MinIO
+    warehouse: "hdfs://localhost:9000/user/hive/warehouse"  # HDFS warehouse path
+    # Additional Hive Metastore properties (optional)
+    # hive.metastore.uris: "thrift://localhost:9083"
+    # HDFS configuration (if needed)
+    fs.defaultFS: "hdfs://localhost:9000"
+    # Kerberos authentication (uncomment if using Kerberos)
+    # hadoop.security.authentication: "kerberos"
+    # hadoop.security.authorization: "true"

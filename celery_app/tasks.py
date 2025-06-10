@@ -238,9 +238,10 @@ def extract_and_load_table_using_partitioning(
             if not rows:
                 break
 
-            last_ingested_id = (
-                rows[-1][primary_key_column] if rows else last_ingested_id
+            last_ingested_date = (
+                rows[-1][primary_key_column] if rows else incremental_date
             )
+            last_ingested_date = incremental_date
 
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
             iceberg_table.append(df)
@@ -251,7 +252,7 @@ def extract_and_load_table_using_partitioning(
 
         # Update ingestion metadata using SQLAlchemy
         with engine.connect() as connection:
-            query = f"UPDATE ingestion_metadata SET last_ingested_time = '{end_date}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
+            query = f"UPDATE ingestion_metadata SET last_ingested_date = '{last_ingested_date}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
             connection.execute(text(query))
             connection.commit()
         return f"Finished extracting and loading {table_name}: {total_rows} rows."

@@ -51,10 +51,13 @@ def orchestrate_incremental_ingestion():
         print("Tables to ingest:", tables_to_ingest)
 
         for entry in tables_to_ingest:
+            table_name = entry["table_name"]
+            if table_name != "employees":
+                continue
             print("Processing table:", entry["table_name"])
             database_name = entry["database_name"]
-            database_url = entry["database_url"]
-            table_name = entry["table_name"]
+            # database_url = entry["database_url"]
+            database_url = "oracle+oracledb://test_user:strong_pass@127.0.0.1:1521/?service_name=freepdb1"
             incremental_date = entry["last_ingested_time"]
             primary_key = entry["primary_key"]
             # Mark job as running

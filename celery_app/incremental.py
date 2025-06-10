@@ -110,7 +110,7 @@ def extract_and_load_table_incremental(
             with engine.connect() as connection:
                 result = connection.execute(text(query))
                 rows = result.fetchall()
-                print(f"Query executed successfully, fetching results... {rows}")
+                # print(f"Query executed successfully, fetching results... {rows}")
                 rows = [dict(row._mapping) for row in rows]
 
             # Convert all Decimal fields to float for Arrow compatibility
@@ -137,7 +137,7 @@ def extract_and_load_table_incremental(
             last_ingested_time = (
                 max(row["last_modified"] for row in rows) if rows else incremental_date
             )
-            print(f"Last ingested time: {last_ingested_time}")
+            # print(f"Last ingested time: {last_ingested_time}")
             offset += chunk_size
             total_rows += len(rows)
 
@@ -146,7 +146,7 @@ def extract_and_load_table_incremental(
         last_ingested_time = (
             max(row["last_modified"] for row in rows) if rows else incremental_date
         )
-        print(f"Last ingested time: {last_ingested_time}")
+        # print(f"Last ingested time: {last_ingested_time}")
         # Get the max last_modified time from this batch
 
         # Convert rows to Arrow table and write to Iceberg

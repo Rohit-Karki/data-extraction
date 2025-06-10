@@ -5,10 +5,43 @@ from pyiceberg.types import (
     StringType,
     DoubleType,
     TimestampType,
+    FloatType,
 )
 
 SCHEMAS = {
     "sales": {
+        "vehicles": Schema(
+            NestedField(1, "license_number", StringType(), required=False),
+            NestedField(2, "business_name", StringType(), required=False),
+            NestedField(3, "business_category", StringType(), required=False),
+            NestedField(4, "business_unique_id", StringType(), required=False),
+            NestedField(5, "asset_type", StringType(), required=False),
+            NestedField(6, "business_asset_id", StringType(), required=False),
+            NestedField(
+                7, "manufacture_identification_number", StringType(), required=False
+            ),
+            NestedField(8, "dmv_license_plate_number", StringType(), required=False),
+            NestedField(9, "state_of_registration", StringType(), required=False),
+            NestedField(10, "dcwp_plate_number", StringType(), required=False),
+            NestedField(11, "decal_number", StringType(), required=False),
+            NestedField(12, "latest_inspection_number", StringType(), required=False),
+            NestedField(
+                13, "latest_inspection_date", StringType(), required=False
+            ),  # or DateType() if structured
+            NestedField(14, "latest_inspection_result", StringType(), required=False),
+            NestedField(
+                15, "last_modified", TimestampType(), required=False
+            ),  # or TimestampType(with_timezone=True)
+        ),
+        "employees": Schema(
+            NestedField(field_id=1, name="id", field_type=IntegerType(), required=True),
+            NestedField(
+                field_id=2, name="category", field_type=StringType(), required=True
+            ),
+            NestedField(
+                field_id=3, name="amount", field_type=FloatType(), required=True
+            ),
+        ),
         "transactions": Schema(
             NestedField(1, "id", IntegerType(), required=True),
             NestedField(2, "category", StringType(), required=True),
