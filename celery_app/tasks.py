@@ -156,6 +156,7 @@ def extract_and_load_table_using_partitioning(
     primary_key_column,
     start_date: str,
     end_date: str,
+    partitioning_column: str = None,
     incremental_date: str = None,
     initial_load: bool = True,
 ):
@@ -214,7 +215,7 @@ def extract_and_load_table_using_partitioning(
             # if done partitioning by primary key or date column
             if primary_key_column and start_date is not None and end_date is not None:
                 where_clauses.append(
-                    f"`{primary_key_column}` >= '{start_date}' AND `{primary_key_column}` <= '{end_date}'"
+                    f"`{partitioning_column}` >= '{start_date}' AND `{primary_key_column}` <= '{end_date}'"
                 )
 
             if where_clauses:

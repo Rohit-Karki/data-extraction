@@ -16,5 +16,12 @@ app.conf.update(
     enable_utc=True,
 )
 
+# app.conf.beat_schedule = {
+#  “run-me-every-ten-seconds”: {
+#  “task”: “tasks.check”,
+#  “schedule”: 10.0
+#  }
+# }
+
 if __name__ == "__main__":
     app.start()
