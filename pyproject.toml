@@ -5,7 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "celery>=5.5.3",
+    "cryptography>=45.0.4",
+    "flower>=2.0.1",
+    "oracledb>=3.1.1",
+    "pandas>=2.3.0",
     "pyarrow>=20.0.0",
-    "pyiceberg[nessie]>=0.9.1",
-    "pyspark>=4.0.0",
+    "pyiceberg[sql-sqlite]>=0.9.1",
+    "pymysql>=1.1.1",
+    "redis>=6.2.0",
+    "sqlalchemy>=2.0.41",
 ]
