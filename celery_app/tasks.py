@@ -10,6 +10,20 @@ from celery import shared_task
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
+# import psutil
+
+
+# @shared_task(name="tasks.log_cpu_usage")
+# def log_cpu_usage(usage_percent):
+#     print(f"CPU usage: {usage_percent}")
+#     return usage_percent
+
+
+# @shared_task(name="tasks.read_cpu_usage")
+# def read_cpu_usage():
+#     print("Reading CPU usage")
+#     usage_percent = psutil.cpu_percent(interval=1)
+
 
 @shared_task(bind=True)
 def extract_and_load_table(
@@ -251,6 +265,9 @@ def extract_and_load_table_using_partitioning(
             offset += chunk_size
             print(f"Table: {table_name}, Processed: {total_rows} rows")
 
+        last_ingested_date = (
+            last_ingested_date if last_ingested_date else incremental_date
+        )
         # Update ingestion metadata using SQLAlchemy
         with engine.connect() as connection:
             query = f"UPDATE ingestion_metadata SET last_ingested_date = '{last_ingested_date}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"

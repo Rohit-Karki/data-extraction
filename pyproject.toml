@@ -10,6 +10,7 @@ dependencies = [
     "flower>=2.0.1",
     "oracledb>=3.1.1",
     "pandas>=2.3.0",
+    "prometheus-client>=0.22.1",
     "pyarrow>=20.0.0",
     "pyiceberg[sql-sqlite]>=0.9.1",
     "pymysql>=1.1.1",

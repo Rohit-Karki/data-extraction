@@ -10,37 +10,81 @@ from datetime import date
 
 # The ingestion orchestration function that manages the ingestion process
 # and dispatches tasks to Celery workers.
-def orchestrate_ingestion():
-    try:
-        # Get tables to ingest
-        query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
-        tables_to_ingest = read_from_db(query).to_dict("records")
-        print("Tables to ingest:", tables_to_ingest)
+# def orchestrate_ingestion():
+#     try:
+#         # Get tables to ingest
+#         query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
+#         tables_to_ingest = read_from_db(query).to_dict("records")
+#         print("Tables to ingest:", tables_to_ingest)
 
-        for entry in tables_to_ingest:
-            print("Processing table:", entry["table_name"])
-            database_name = entry["database_name"]
-            database_url = entry["database_url"]
-            table_name = entry["table_name"]
-            last_ingested_time = entry["last_ingested_time"]
-            primary_key = entry["primary_key"]
+#         for entry in tables_to_ingest:
+#             print("Processing table:", entry["table_name"])
+#             database_name = entry["database_name"]
+#             database_url = entry["database_url"]
+#             table_name = entry["table_name"]
+#             last_ingested_time = entry["last_ingested_time"]
+#             primary_key = entry["primary_key"]
 
-            # Mark job as running
-            update_metadata(table_name, is_running=True)
+#             # Mark job as running
+#             update_metadata(table_name, is_running=True)
 
-            # Dispatch Celery task with starting point
-            result = extract_and_load_table.apply_async(
-                args=[table_name, primary_key, last_ingested_time]
-            )
+#             # Dispatch Celery task with starting point
+#             result = extract_and_load_table.apply_async(
+#                 args=[table_name, primary_key, last_ingested_time]
+#             )
 
-            logger = logging.getLogger(__name__)
-            logger.info(f"Dispatching task for {table_name}")
-            print("Task submitted:", result.id)
+#             logger = logging.getLogger(__name__)
+#             logger.info(f"Dispatching task for {table_name}")
+#             print("Task submitted:", result.id)
 
-    except Exception as e:
-        print(f"Error in orchestration: {e}")
-    finally:
-        update_metadata(None, is_running=False)
+#     except Exception as e:
+#         print(f"Error in orchestration: {e}")
+#     finally:
+#         update_metadata(None, is_running=False)
+
+
+# def orchestrate_partitioned_ingestion():
+#     try:
+#         # Get tables to ingest
+#         query = "SELECT * FROM ingestion_metadata WHERE is_running = FALSE"
+#         tables_to_ingest = read_from_db(query).to_dict("records")
+#         # print("Tables to ingest:", tables_to_ingest)
+
+#         for entry in tables_to_ingest:
+#             table_name = entry["table_name"]
+#             # if table_name == "ai_job_dataset" or table_name == "transactions":
+#             #     continue
+#             print("Processing table:", entry["table_name"])
+#             database_name = entry["database_name"]
+#             database_url = entry["database_url"]
+#             incremental_date = entry["last_ingested_time"]
+#             primary_key = entry["primary_key"]
+#             # Mark job as running
+#             update_metadata(table_name, is_running=True)
+
+#             # Dispatch Celery task with starting point
+#             year_ranges = generate_year_partitions(2015, 2025)
+#             for start_date, end_date in year_ranges:
+#                 print(f"Partition: {start_date} to {end_date}")
+
+#             result = extract_and_load_table_using_partitioning.apply_async(
+#                 args=[
+#                     table_name,
+#                     primary_key,
+#                     start_date,
+#                     end_date,
+#                 ]
+#             )
+
+#             logger = logging.getLogger(__name__)
+#             logger.info(
+#                 f"Dispatching task for {table_name} and task submitted {result.id}"
+#             )
+
+#     except Exception as e:
+#         print(f"Error in incremental orchestration: {e}")
+#     finally:
+#         update_metadata(None, is_running=False)
 
 
 def orchestrate_incremental_ingestion():
@@ -57,14 +101,6 @@ def orchestrate_incremental_ingestion():
             print("Processing table:", entry["table_name"])
             database_name = entry["database_name"]
             database_url = entry["database_url"]
-            # database_url = (
-            #     f"{database_url}?autocommit=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useCompression=true"
-            #     if database_name == "mysql"
-            #     else database_url
-            # )
-            # database_url = (
-            #     "oracle+oracledb://system:testpassword@0.0.0.0:1521/?service_name=free"
-            # )
             incremental_date = entry["last_ingested_time"]
             primary_key = entry["primary_key"]
             # Mark job as running
@@ -103,23 +139,8 @@ def generate_year_partitions(start_year, end_year):
 
 
 def main():
-
     orchestrate_incremental_ingestion()
-    # year_ranges = generate_year_partitions(2015, 2025)
-    # for start_date, end_date in year_ranges:
-    #     print(f"Partition: {start_date} to {end_date}")
-
-    #     extract_and_load_table_using_partitioning.apply_async(
-    #         args=[
-    #             "Drivers",
-    #             "app_date_clean",  # optional
-    #             start_date,
-    #             end_date,
-    #         ]
-    #     )
-
     # orchestrate_ingestion()
-    print("This is a simple Iceberg example using PyIceberg.")
 
 
 if __name__ == "__main__":

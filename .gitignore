@@ -1,3 +1,5 @@
+*.env
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -11,3 +13,5 @@ wheels/
 
 iceberg-hive-runtime-1.4.2.jar
 postgresql-42.6.0.jar
+prometheus-2.47.0.linux-amd64
+node_exporter-1.9.1.linux-amd64

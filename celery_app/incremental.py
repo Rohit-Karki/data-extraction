@@ -8,6 +8,17 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 from database import update_metadata
 
+import time
+import psutil
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+
+
+# Prometheus metrics
+TASK_COUNTER = Counter('celery_task_total', 'Total number of tasks', ['task_name', 'status'])
+TASK_DURATION = Histogram('celery_task_duration_seconds', 'Task duration', ['task_name'])
+CPU_USAGE = Gauge('celery_process_cpu_percent', 'CPU usage percentage', ['task_name', 'worker_id'])
+MEMORY_USAGE = Gauge('celery_process_memory_mb', 'Memory usage in MB', ['task_name', 'worker_id'])
+
 
 @shared_task(bind=True)
 def extract_and_load_table_incremental(
@@ -66,7 +77,7 @@ def extract_and_load_table_incremental(
         # --- 3. Extract Data in Chunks and Batch Insert ---
         offset = 0
         total_rows = 0
-        chunk_size = 1000
+        chunk_size = 100
 
         while True:
             # Build query with optional partitioning

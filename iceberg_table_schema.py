@@ -131,5 +131,3 @@ SCHEMAS = {
         # ),
     },
 }
-
-print(SCHEMAS["sales"])

@@ -1,26 +1,6 @@
 version: '3'
 
 services:  
-  minio:
-    image: quay.io/minio/minio
-    container_name: minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=password
-      - MINIO_REGION=us-east-1
-    entrypoint: >
-      /bin/sh -c "
-      minio server /data --console-address ':9001' &
-      sleep 10;
-      mc alias set myminio http://localhost:9000 admin password;
-      mc mb myminio/my-bucket --ignore-existing;
-      tail -f /dev/null"
-    networks:
-      - dbdl
-  
   mysql:
     image: mysql:8.0
     container_name: mysql
@@ -38,18 +18,20 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+    networks:
+      - dbdl
 
-  # celery_worker:
-  #   build: .
-  #   container_name: celery_worker
-  #   command: celery -A celery_app worker --loglevel=info --concurrency=4
-  #   depends_on:
-  #     - redis
-  #     - mysql
-  #   environment:
-  #     - PYTHONUNBUFFERED=1
-  #   networks:
-  #     - dbdl
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    depends_on:
+      - redis
+      - mysql
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dbdl
 
   postgres:
     image: postgres:14-alpine
@@ -58,61 +40,23 @@ services:
     volumes:
       - ~/apps/postgres1:/var/lib/postgresql/data
     environment:
-      - POSTGRES_PASSWORD=rootpasword
+      - POSTGRES_PASSWORD=rootpassword
       - POSTGRES_USER=root
       - POSTGRES_DB=mydb
     networks:
       - dbdl
 
-  # spark-iceberg:
-  #   image: tabulario/spark-iceberg
-  #   container_name: spark-iceberg
-  #   build: spark/
-  #   networks:
-  #     dbdl:
-  #   depends_on:
-  #     - postgres
-  #     - mysql
-  #     - minio
-  #   volumes:
-  #     - ./warehouse:/home/iceberg/warehouse
-  #     - ./notebooks:/home/iceberg/notebooks/notebooks
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=admin
-  #     - AWS_SECRET_ACCESS_KEY=password
-  #     - AWS_REGION=us-east-1
-  #   ports:
-  #     - 8888:8888
-  #     - 8080:8080
-  #     - 10000:10000
-  #     - 10001:10001
-
-  # oracle-db:
-  #   image: container-registry.oracle.com/database/express:latest
-  #   container_name: oracle-demo
-  #   ports:
-  #     - "1521:1521"
-  #   environment:
-  #     - ORACLE_PWD=YourPassword123
-  #   volumes:
-  #     - oracle-data:/opt/oracle/oradata # Path for persistent data
-
-
-  # orchestrator:
-  #   build: .
-  #   container_name: orchestrator
-  #   command: python main.py
-  #   depends_on:
-  #     - mysql
-  #     - celery_worker
-  #   environment:
-  #     - PYTHONUNBUFFERED=1
-  #   networks:
-  #     - dbdl
-
-# volumes:
-#   oracle-data:
-
+  orchestrator:
+    build: .
+    container_name: orchestrator
+    command: python main.py
+    depends_on:
+      - mysql
+      - celery_worker
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dbdl
 
 networks:
   dbdl:
