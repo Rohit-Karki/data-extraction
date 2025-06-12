@@ -1,5 +1,4 @@
 from pyiceberg.catalog import load_catalog
-from pyiceberg.schema import Schema
 import pyarrow as pa
 from decimal import Decimal
 from iceberg_table_schema import SCHEMAS
@@ -21,17 +20,9 @@ def extract_and_load_table_incremental(
     database_name: str = "postgres",
 ):
     try:
-        # Database configuration
-        DB_CONFIG = {
-            "host": "localhost",
-            "user": "root",
-            "password": "rootpassword",
-            "database": "mydb",
-        }
         # Create engine with connection pooling
-        DATABASE_URL = database_url
         engine = create_engine(
-            DATABASE_URL,
+            database_url,
             poolclass=QueuePool,
             pool_size=5,
             max_overflow=10,
@@ -46,7 +37,6 @@ def extract_and_load_table_incremental(
 
         # Convert incremental_date to datetime if it's a string
         if initial_load is False:
-            # print("Incremental load detected")
             if isinstance(incremental_date, str):
                 incremental_date = datetime.fromisoformat(incremental_date)
 
@@ -57,26 +47,12 @@ def extract_and_load_table_incremental(
 
         # Ensure the namespace exists
         catalog.create_namespace_if_not_exists("sales")
-        namespaces = catalog.list_namespaces()
-        # print("Namespaces:", namespaces)
 
         # Load or create the Iceberg table
         try:
             iceberg_table = catalog.load_table(f"sales.{table_name}")
-
-            # For testing only, remove in production
-            # print(f"Loaded Iceberg table: {iceberg_table.name}")
-            # Uncomment below lines to read data from Iceberg table
-            # scan = iceberg_table.scan()
-            # df_read = scan.to_pandas()
-            # print(df_read)
-
         except Exception:
-            # Basic table creation for demonstration, enhance with schema detection
-            # print(f"Table {table_name} not found, creating a basic one.")
-            # You'll need to define the Iceberg schema based on MySQL table's schema.
-            # This is crucial and might require pre-analysis or a schema inference step.
-            # For now using from a schema dictionary
+            # Todo: Implement check if schema exists in SCHEMAS
             schema = (
                 SCHEMAS["sales"][table_name]
                 # if table_name in SCHEMAS["sales"]
@@ -88,8 +64,6 @@ def extract_and_load_table_incremental(
             )
 
         # --- 3. Extract Data in Chunks and Batch Insert ---
-        # print(f"Using schema:")
-        # print(SCHEMAS["sales"][table_name])
         offset = 0
         total_rows = 0
         chunk_size = 1000
@@ -98,11 +72,17 @@ def extract_and_load_table_incremental(
             # Build query with optional partitioning
             query = f"SELECT * FROM {table_name}"
             where_clauses = []
-            # if initial_load is False and incremental_date and database_name != "oracle":
-            #     where_clauses.append(f"last_modified >= '{incremental_date}'")
+            if initial_load is False and incremental_date and database_name != "oracle":
+                where_clauses.append(f"last_modified >= '{incremental_date}'")
             # Add other WHERE clauses for incremental/date-based if needed
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
+
+            # Todo: Use primary key based incrementatl chunk extraction inplace of offset
+            # if primary_key_column:
+            #     query += f" ORDER BY {primary_key_column} ASC LIMIT {chunk_size}"
+            # else:
+            #     query += " ORDER BY last_modified ASC"
             if database_name == "oracle":
                 # pass
                 query += f" OFFSET {offset} ROWS FETCH NEXT {chunk_size} ROWS ONLY"
@@ -118,60 +98,41 @@ def extract_and_load_table_incremental(
                 rows = [dict(row._mapping) for row in rows]
 
             # Convert all Decimal fields to float for Arrow compatibility
-
-            # Convert all Decimal fields to float for Arrow compatibility
             for row in rows:
                 for key, value in row.items():
                     if isinstance(value, Decimal):
                         row[key] = float(value)
             # print(f"Fetched {len(rows)} rows from the database.")
-            if not rows:
+            if len(rows) == 0:
+                # No more rows to process
                 break
-
-            # Process the rows
-            # df = pd.DataFrame(rows)
             # print(f"Processing {len(rows)} rows")
+
+            # In place of pandas-> Arrow conversion, directly use pyarrow
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
-            # Convert DataFrame to Arrow table
-            # arrow_table = pa.Table.from_pandas(df)
 
             # Write to Iceberg table
             iceberg_table.append(df)
 
             # iceberg_table.upsert(df)
 
-            # last_ingested_time = (
-            #     max(row["last_modified"] for row in rows) if rows else incremental_date
-            # )
-            last_ingested_time = incremental_date
+            # Get the max last_modified time from this batch
+            last_ingested_time = (
+                max(row["last_modified"] for row in rows) if rows else incremental_date
+            )
             # print(f"Last ingested time: {last_ingested_time}")
             offset += chunk_size
             total_rows += len(rows)
 
-        print(f"Total rows processed: {total_rows}")
-
-        # print(f"Last ingested time: {last_ingested_time}")
-        # Get the max last_modified time from this batch
-
-        # Convert rows to Arrow table and write to Iceberg
-        # df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
-        # iceberg_table.append(df)
-
-        total_rows += len(rows)
-        offset += chunk_size
         print(f"Table: {table_name}, Processed: {total_rows} rows")
+
+        last_ingested_time = incremental_date
 
         update_metadata(
             table_name,
             last_ingested_time=last_ingested_time,
             is_running=False,
         )
-        # Update ingestion metadata using SQLAlchemy
-        # with engine.connect() as connection:
-        #     query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = FALSE, updated_at = NOW() WHERE table_name = '{table_name}'"
-        #     connection.execute(text(query))
-        #     connection.commit()
-
         return f"Finished extracting and loading {table_name}: {total_rows} rows."
     except Exception as e:
         print(f"Error in incremental load: {e}")

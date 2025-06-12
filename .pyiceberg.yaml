@@ -1,3 +1,5 @@
+# If using Iceberg with MinIO and SQLITE for catalog store, you can configure it like this:
+
 # catalog:
 #   default:
 #     type: sql
@@ -10,13 +12,23 @@
 #     s3.region: "us-east-1"  # Dummy region (if required)
 #     s3.path-style-access: "true"  # Important for MinIO
 
+# If using local file system with SQLITE for catalog store, you can configure it like this:
+
+# catalog:
+#   default:
+#     type: sql
+#     uri: sqlite:////tmp/warehouse/pyiceberg_catalog.db
+#     warehouse: file://///tmp/warehouse
+
+# If using Iceberg with HDFS and SQLITE for catalog store, you can configure it like this:
+
 catalog:
   default:
     type: sql
     uri: "sqlite:////tmp/warehouse/pyiceberg_catalog.db"
     warehouse: "hdfs://localhost:9000/user/hive/warehouse"  # HDFS warehouse path
-    # Additional Hive Metastore properties (optional)
     # hive.metastore.uris: "thrift://localhost:9083"
+    # Additional Hive Metastore properties (optional)
     # HDFS configuration (if needed)
     fs.defaultFS: "hdfs://localhost:9000"
     # Kerberos authentication (uncomment if using Kerberos)
