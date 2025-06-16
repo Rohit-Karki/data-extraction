@@ -124,10 +124,10 @@ SCHEMAS = {
             NestedField(18, "benefits_score", StringType(), required=False),
             NestedField(19, "company_name", StringType(), required=False),
         ),
-        # "orders": Schema(
-        #     NestedField(1, "order_id", IntegerType(), required=True),
-        #     NestedField(2, "customer_id", IntegerType(), required=True),
-        #     NestedField(3, "order_date", StringType(), required=True),
-        # ),
+        "orders": Schema(
+            NestedField(1, "order_id", IntegerType(), required=True),
+            NestedField(2, "customer_id", IntegerType(), required=True),
+            NestedField(3, "order_date", StringType(), required=True),
+        ),
     },
 }
