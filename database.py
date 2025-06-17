@@ -75,6 +75,26 @@ try:
     ):
         """Update ingestion metadata for a table"""
         try:
+            # Database configuration
+            DB_CONFIG = {
+                "host": "localhost",
+                "user": "root",
+                "password": "rootpassword",
+                "database": "mydb",
+            }
+
+            # Create engine with connection pooling
+            DATABASE_URL = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
+            engine = create_engine(
+                DATABASE_URL,
+                poolclass=QueuePool,
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,  # Verify connections before use
+                pool_recycle=3600,  # Recycle connections every hour
+                pool_timeout=30,
+            )
+
             with engine.connect() as connection:
                 if last_ingested_time:
                     query = f"UPDATE ingestion_metadata SET last_ingested_time = '{last_ingested_time}', is_running = {is_running}, updated_at = NOW() WHERE table_name = '{table_name}'"

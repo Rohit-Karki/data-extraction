@@ -96,7 +96,7 @@ def orchestrate_incremental_ingestion():
 
         for entry in tables_to_ingest:
             table_name = entry["table_name"]
-            # if table_name == "ai_job_dataset" or table_name == "transactions":
+            # if table_name != "vehicles":
             #     continue
             print("Processing table:", entry["table_name"])
             database_name = entry["database_name"]

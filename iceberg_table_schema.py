@@ -11,7 +11,7 @@ from pyiceberg.types import (
 SCHEMAS = {
     "sales": {
         "vehicles": Schema(
-            NestedField(1, "license_number", StringType(), required=False),
+            NestedField(1, "license_number", StringType(), required=True),
             NestedField(2, "business_name", StringType(), required=False),
             NestedField(3, "business_category", StringType(), required=False),
             NestedField(4, "business_unique_id", StringType(), required=False),
@@ -32,6 +32,7 @@ SCHEMAS = {
             NestedField(
                 15, "last_modified", TimestampType(), required=False
             ),  # or TimestampType(with_timezone=True)
+            identifier_field_ids=[1],
         ),
         "employees": Schema(
             NestedField(field_id=1, name="id", field_type=IntegerType(), required=True),
@@ -44,15 +45,17 @@ SCHEMAS = {
             NestedField(
                 field_id=3, name="salary", field_type=FloatType(), required=True
             ),
+            identifier_field_ids=[1],
         ),
         "transactions": Schema(
             NestedField(1, "id", IntegerType(), required=True),
             NestedField(2, "category", StringType(), required=True),
             NestedField(3, "amount", DoubleType(), required=True),
+            identifier_field_ids=[1],
         ),
         "Drivers": Schema(
             NestedField(
-                field_id=1, name="app_no", field_type=StringType(), required=False
+                field_id=1, name="app_no", field_type=StringType(), required=True
             ),
             NestedField(
                 field_id=2, name="type", field_type=StringType(), required=False
@@ -102,6 +105,7 @@ SCHEMAS = {
                 field_type=TimestampType(),
                 required=False,
             ),
+            identifier_field_ids=[1],
         ),
         "ai_job_dataset": Schema(
             NestedField(1, "job_id", StringType(), required=True),
@@ -123,6 +127,7 @@ SCHEMAS = {
             NestedField(17, "job_description_length", StringType(), required=False),
             NestedField(18, "benefits_score", StringType(), required=False),
             NestedField(19, "company_name", StringType(), required=False),
+            identifier_field_ids=[1],
         ),
         "orders": Schema(
             NestedField(1, "order_id", IntegerType(), required=True),

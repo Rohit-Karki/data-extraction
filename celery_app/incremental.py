@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 from database import update_metadata
+from pyarrow_ops import join, filters, groupby, head, drop_duplicates
 
 import time
 import psutil
@@ -129,11 +130,16 @@ def extract_and_load_table_incremental(
 
             # In place of pandas-> Arrow conversion, directly use pyarrow
             df = pa.Table.from_pylist(rows, schema=iceberg_table.schema().as_arrow())
+            if table_name == "vehicles":
+                df = drop_duplicates(df, on=["license_number"], keep="first")
+            elif table_name == "transactions":
+                df = drop_duplicates(df, on=["id"], keep="first")
+            elif table_name == "Drivers":
+                df = drop_duplicates(df, on=["app_no"], keep="first")
+            elif table_name == "ai_job_dataset":
+                df = drop_duplicates(df, on=["job_id"], keep="first")
 
-            # Write to Iceberg table
-            iceberg_table.append(df)
-
-            # iceberg_table.upsert(df)
+            iceberg_table.upsert(df)
 
             # Get the max last_modified time from this batch
             last_ingested_time = (
