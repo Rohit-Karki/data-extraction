@@ -6,7 +6,7 @@ from celery_app.incremental import extract_and_load_table_incremental
 from database import engine, text, read_from_db, update_metadata
 import logging
 from datetime import date
-
+from filprofiler.api import profile
 
 # The ingestion orchestration function that manages the ingestion process
 # and dispatches tasks to Celery workers.
@@ -105,7 +105,19 @@ def orchestrate_incremental_ingestion():
             primary_key = entry["primary_key"]
             # Mark job as running
             update_metadata(table_name, is_running=True)
-
+            # result = profile(
+            #     lambda: extract_and_load_table_incremental.apply_async(
+            #         args=[
+            #             table_name,
+            #             primary_key,
+            #             incremental_date,
+            #             database_url,
+            #             False,
+            #             database_name,
+            #         ]
+            #     ),
+            #     "/tmp/fil-result",
+            # )
             # Dispatch Celery task with starting point
             result = extract_and_load_table_incremental.apply_async(
                 args=[

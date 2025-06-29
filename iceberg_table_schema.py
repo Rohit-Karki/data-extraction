@@ -110,7 +110,7 @@ SCHEMAS = {
         "ai_job_dataset": Schema(
             NestedField(1, "job_id", StringType(), required=True),
             NestedField(2, "job_title", StringType(), required=True),
-            NestedField(3, "salary_usd", StringType(), required=False),
+            NestedField(3, "salary_usd", IntegerType(), required=False),
             NestedField(4, "salary_currency", StringType(), required=False),
             NestedField(5, "experience_level", StringType(), required=False),
             NestedField(6, "employment_type", StringType(), required=False),
