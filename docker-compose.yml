@@ -3,46 +3,42 @@ version: '3'
 networks:
   # shared-net:
   #     external: true
-  airflow_mysql_dag_default:
-    external: true
-    name: airflow_mysql_dag_default
   dbdl:
     driver: bridge
 
 services:  
   mysql:
     image: mysql:8.0
-    container_name: mysql
+    container_name: mysql1
     ports:
       - "3306:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=rootpassword
-      - MYSQL_DATABASE=exampledb
+      - MYSQL_DATABASE=exampledb  
       - MYSQL_USER=user
       - MYSQL_PASSWORD=password
     networks:
       - dbdl
-      - airflow_mysql_dag_default
 
-  # redis:
-  #   image: redis:7
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - dbdl
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - dbdl
 
-  # postgres:
-  #   image: postgres:14-alpine
-  #   ports:
-  #     - 5432:5432
-  #   volumes:
-  #     - ~/apps/postgres1:/var/lib/postgresql/data
-  #   environment:
-  #     - POSTGRES_PASSWORD=rootpassword
-  #     - POSTGRES_USER=root
-  #     - POSTGRES_DB=mydb
-  #   networks:
-  #     - dbdl
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - 5432:5432
+    volumes:
+      - ~/apps/postgres1:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=rootpassword
+      - POSTGRES_USER=root
+      - POSTGRES_DB=mydb
+    networks:
+      - dbdl
   
   # celery_worker:
   #   build: .

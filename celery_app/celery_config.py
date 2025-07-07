@@ -3,13 +3,14 @@ from celery import Celery
 # worker_with_metrics.py
 import os
 from celery import Celery
-from prometheus_client import start_http_server, PROCESS_COLLECTOR, PLATFORM_COLLECTOR
-from prometheus_client import (
-    multiprocess,
-    generate_latest,
-    CONTENT_TYPE_LATEST,
-    CollectorRegistry,
-)
+
+# from prometheus_client import start_http_server, PROCESS_COLLECTOR, PLATFORM_COLLECTOR
+# from prometheus_client import (
+#     multiprocess,
+#     generate_latest,
+#     CONTENT_TYPE_LATEST,
+#     CollectorRegistry,
+# )
 
 
 app = Celery(
